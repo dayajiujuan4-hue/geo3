@@ -4,6 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>中国34省級行政区「言えるかな？」</title>
+  
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  
   <style>
     :root {
       --primary: #d32f2f;
@@ -41,7 +45,7 @@
       justify-content: space-between;
       align-items: center;
       box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-      z-index: 10;
+      z-index: 1000;
     }
 
     .title-group {
@@ -96,75 +100,63 @@
     }
 
     /* 地図エリア */
-    .map-container {
+    #map {
       flex: 1;
-      background-color: #eef2f5;
-      position: relative;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      overflow: hidden;
-    }
-
-    svg#china-map {
-      width: 100%;
       height: 100%;
-      max-width: 1000px;
-      max-height: 800px;
-      filter: drop-shadow(0px 8px 16px rgba(0,0,0,0.06));
+      background: #eef2f5;
+      z-index: 1;
     }
 
-    /* 各省・地域の背景シェイプ */
-    .region-shape {
-      fill: #e0e0e0;
-      stroke: #ffffff;
-      stroke-width: 1.5;
-      transition: fill 0.3s ease;
+    /* Leaflet カスタムマーカー */
+    .custom-div-icon {
+      background: transparent;
+      border: none;
     }
 
-    .region-shape:hover {
-      fill: #d5d5d5;
-    }
-
-    /* 省のマークポイント（ノード） */
-    .province-node {
-      fill: #9e9e9e;
-      stroke: #ffffff;
-      stroke-width: 1.5;
+    .marker-pin {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #757575;
+      border: 2px solid #ffffff;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
       transition: all 0.3s ease;
-      cursor: pointer;
     }
 
-    .province-node.discovered {
-      fill: var(--primary);
-      stroke: var(--accent);
-      stroke-width: 2;
-      animation: pulse 1.5s infinite;
+    .marker-pin.discovered {
+      background: var(--primary);
+      border-color: var(--accent);
+      transform: scale(1.3);
+      animation: bounce 0.5s ease;
     }
 
-    @keyframes pulse {
-      0% { transform: scale(1); }
-      50% { transform: scale(1.3); }
-      100% { transform: scale(1); }
+    @keyframes bounce {
+      0%, 100% { transform: scale(1.3) translateY(0); }
+      50% { transform: scale(1.5) translateY(-5px); }
     }
 
-    /* ラベル表示 */
-    .province-label {
-      font-size: 11px;
+    .province-tooltip {
+      background: rgba(0, 0, 0, 0.75);
+      border: none;
+      border-radius: 4px;
+      color: #fff;
       font-weight: bold;
-      fill: #212121;
-      text-anchor: middle;
-      opacity: 0;
-      transition: opacity 0.4s ease, transform 0.3s ease;
-      pointer-events: none;
-      text-shadow: 1px 1px 2px #fff, -1px -1px 2px #fff, 1px -1px 2px #fff, -1px 1px 2px #fff;
+      font-size: 12px;
+      padding: 4px 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
     }
 
-    .province-label.visible {
-      opacity: 1;
+    .province-tooltip-giveup {
+      background: rgba(198, 40, 40, 0.85);
+      border: none;
+      border-radius: 4px;
+      color: #fff;
+      font-weight: bold;
+      font-size: 12px;
+      padding: 4px 8px;
     }
 
-    /* サイドバー / 操作パネル */
+    /* サイドバー */
     .sidebar {
       width: 360px;
       background: var(--card-bg);
@@ -172,7 +164,7 @@
       display: flex;
       flex-direction: column;
       box-shadow: -2px 0 10px rgba(0,0,0,0.05);
-      z-index: 5;
+      z-index: 500;
     }
 
     .input-section {
@@ -230,7 +222,7 @@
       background-color: #d6d6d6;
     }
 
-    /* 発見リスト */
+    /* リスト表示 */
     .list-section {
       flex: 1;
       overflow-y: auto;
@@ -280,7 +272,7 @@
       color: #4ea852;
     }
 
-    /* 正解トーストフィードバック */
+    /* トースト */
     .toast {
       position: absolute;
       top: 20px;
@@ -296,7 +288,7 @@
       opacity: 0;
       transition: all 0.3s ease;
       box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      z-index: 20;
+      z-index: 2000;
     }
 
     .toast.show {
@@ -304,7 +296,6 @@
       transform: translateX(-50%) translateY(0);
     }
 
-    /* レスポンシブ対応 */
     @media (max-width: 768px) {
       .main-container {
         flex-direction: column;
@@ -313,7 +304,7 @@
         width: 100%;
         height: 45vh;
       }
-      .map-container {
+      #map {
         height: 55vh;
       }
     }
@@ -339,32 +330,12 @@
   </header>
 
   <div class="main-container">
-    <!-- 地図領域（独自SVG描画） -->
-    <div class="map-container">
-      <div id="toast" class="toast">北京 発見！</div>
-      
-      <svg id="china-map" viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg">
-        <!-- 簡略化された中国地図の地域背景シルエット -->
-        <g id="regions">
-          <path class="region-shape" d="M100,180 L220,160 L280,220 L240,320 L160,320 L100,250 Z" title="西北" />
-          <path class="region-shape" d="M280,220 L380,200 L410,270 L340,350 L240,320 Z" title="青海/甘粛/四川" />
-          <path class="region-shape" d="M380,200 L500,150 L560,190 L480,260 L410,270 Z" title="内蒙古/内陸部" />
-          <path class="region-shape" d="M500,150 L620,70 L680,110 L620,180 L560,190 Z" title="東北" />
-          <path class="region-shape" d="M560,190 L640,200 L630,280 L540,270 L480,260 Z" title="華北/山東" />
-          <path class="region-shape" d="M480,260 L540,270 L580,350 L480,380 L410,270 Z" title="華中" />
-          <path class="region-shape" d="M540,270 L630,280 L650,360 L580,350 Z" title="華東" />
-          <path class="region-shape" d="M340,350 L410,270 L480,380 L420,450 L330,410 Z" title="西南" />
-          <path class="region-shape" d="M480,380 L580,350 L610,430 L500,470 L420,450 Z" title="華南" />
-          <path class="region-shape" d="M480,490 L520,490 L510,520 L470,510 Z" title="海南" />
-          <path class="region-shape" d="M640,380 L660,380 L650,430 L630,420 Z" title="台湾" />
-        </g>
+    <div id="toast" class="toast">北京 発見！</div>
+    
+    <!-- Leaflet地図 -->
+    <div id="map"></div>
 
-        <!-- 各省のノードとラベル群（JSで生成・連動） -->
-        <g id="provinces-group"></g>
-      </svg>
-    </div>
-
-    <!-- サイドバー (入力 & リスト表示) -->
+    <!-- サイドバー -->
     <div class="sidebar">
       <div class="input-section">
         <div class="input-wrapper">
@@ -381,130 +352,139 @@
           <span>省級行政区一覧</span>
           <span id="found-count">0 / 34</span>
         </div>
-        <div class="provinces-grid" id="provinces-grid">
-          <!-- JSで動的にカードを生成 -->
-        </div>
+        <div class="provinces-grid" id="provinces-grid"></div>
       </div>
     </div>
   </div>
 
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
   <script>
-    // --- 中国の全34省級行政区データ ---
+    // --- 中国の全34省級行政区データ（緯度・経度座標付き） ---
     const PROVINCES_DATA = [
       // 直轄市 (4)
-      { id: "beijing", name: "北京", pinyin: "Beijing", type: "直轄市", cx: 565, cy: 205, aliases: ["ぺきん", "ペキン", "beijing"] },
-      { id: "tianjin", name: "天津", pinyin: "Tianjin", type: "直轄市", cx: 580, cy: 215, aliases: ["てんしん", "テンシン", "tianjin"] },
-      { id: "shanghai", name: "上海", pinyin: "Shanghai", type: "直轄市", cx: 625, cy: 300, aliases: ["しゃんはい", "シャンハイ", "shanghai"] },
-      { id: "chongqing", name: "重慶", pinyin: "Chongqing", type: "直轄市", cx: 430, cy: 340, aliases: ["じゅうけい", "ジュウケイ", "chongqing"] },
+      { id: "beijing", name: "北京", pinyin: "Beijing", type: "直轄市", lat: 39.9042, lng: 116.4074, aliases: ["ぺきん", "ペキン", "beijing"] },
+      { id: "tianjin", name: "天津", pinyin: "Tianjin", type: "直轄市", lat: 39.3434, lng: 117.3616, aliases: ["てんしん", "テンシン", "tianjin"] },
+      { id: "shanghai", name: "上海", pinyin: "Shanghai", type: "直轄市", lat: 31.2304, lng: 121.4737, aliases: ["しゃんはい", "シャンハイ", "shanghai"] },
+      { id: "chongqing", name: "重慶", pinyin: "Chongqing", type: "直轄市", lat: 29.5630, lng: 106.5516, aliases: ["じゅうけい", "ジュウケイ", "chongqing"] },
 
       // 省 (23)
-      { id: "hebei", name: "河北省", pinyin: "Hebei", cx: 555, cy: 225, aliases: ["かほく", "かほくしょう", "河北", "hebei"] },
-      { id: "shanxi_xa", name: "山西省", pinyin: "Shanxi", cx: 525, cy: 235, aliases: ["さんせい", "さんせいしょう", "山西", "shanxi"] },
-      { id: "liaoning", name: "遼寧省", pinyin: "Liaoning", cx: 620, cy: 170, aliases: ["りょうねい", "りょうねいしょう", "遼寧", "liaoning"] },
-      { id: "jilin", name: "吉林省", pinyin: "Jilin", cx: 640, cy: 135, aliases: ["きつりん", "きつりんしょう", "吉林", "jilin"] },
-      { id: "heilongjiang", name: "黒竜江省", pinyin: "Heilongjiang", cx: 645, cy: 90, aliases: ["こくりゅうこう", "こくりゅうこうしょう", "黒竜江", "heilongjiang"] },
-      { id: "jiangsu", name: "江蘇省", pinyin: "Jiangsu", cx: 595, cy: 280, aliases: ["こうそ", "こうそしょう", "江蘇", "jiangsu"] },
-      { id: "zhejiang", name: "浙江省", pinyin: "Zhejiang", cx: 610, cy: 330, aliases: ["せっこう", "せっこうしょう", "浙江", "zhejiang"] },
-      { id: "anhui", name: "安徽省", pinyin: "Anhui", cx: 570, cy: 300, aliases: ["あんき", "あんきしょう", "安徽", "anhui"] },
-      { id: "fujian", name: "福建省", pinyin: "Fujian", cx: 585, cy: 390, aliases: ["ふっけん", "ふっけんしょう", "福建", "fujian"] },
-      { id: "jiangxi", name: "江西省", pinyin: "Jiangxi", cx: 550, cy: 360, aliases: ["こうせい", "こうせいしょう", "江西", "jiangxi"] },
-      { id: "shandong", name: "山東省", pinyin: "Shandong", cx: 585, cy: 245, aliases: ["さんとう", "さんとうしょう", "山東", "shandong"] },
-      { id: "henan", name: "河南省", pinyin: "Henan", cx: 525, cy: 280, aliases: ["かなん", "かなんしょう", "河南", "henan"] },
-      { id: "hubei", name: "湖北省", pinyin: "Hubei", cx: 515, cy: 320, aliases: ["こほく", "こほくしょう", "湖北", "hubei"] },
-      { id: "hunan", name: "湖南省", pinyin: "Hunan", cx: 505, cy: 370, aliases: ["こなん", "こなんしょう", "湖南", "hunan"] },
-      { id: "guangdong", name: "広東省", pinyin: "Guangdong", cx: 530, cy: 430, aliases: ["かんとん", "かんとんしょう", "広東", "guangdong"] },
-      { id: "hainan", name: "海南省", pinyin: "Hainan", cx: 495, cy: 500, aliases: ["かいなん", "かいなんしょう", "海南", "hainan"] },
-      { id: "sichuan", name: "四川省", pinyin: "Sichuan", cx: 375, cy: 330, aliases: ["しせん", "しせんしょう", "四川", "sichuan"] },
-      { id: "guizhou", name: "貴州省", pinyin: "Guizhou", cx: 435, cy: 390, aliases: ["きしゅう", "きしゅうしょう", "貴州", "guizhou"] },
-      { id: "yunnan", name: "雲南省", pinyin: "Yunnan", cx: 365, cy: 420, aliases: ["うんなん", "うんなんしょう", "雲南", "yunnan"] },
-      { id: "shaanxi_xi", name: "陝西省", pinyin: "Shaanxi", cx: 475, cy: 275, aliases: ["せんせい", "せんせいしょう", "陝西", "shaanxi"] },
-      { id: "gansu", name: "甘粛省", pinyin: "Gansu", cx: 380, cy: 240, aliases: ["かんしゅく", "かんしゅくしょう", "甘粛", "gansu"] },
-      { id: "qinghai", name: "青海省", pinyin: "Qinghai", cx: 300, cy: 260, aliases: ["せいかい", "せいかいしょう", "青海", "qinghai"] },
-      { id: "taiwan", name: "台湾省", pinyin: "Taiwan", cx: 645, cy: 400, aliases: ["たいわん", "タイワン", "台湾", "taiwan"] },
+      { id: "hebei", name: "河北省", pinyin: "Hebei", lat: 38.0428, lng: 114.5149, aliases: ["かほく", "かほくしょう", "河北", "hebei"] },
+      { id: "shanxi_xa", name: "山西省", pinyin: "Shanxi", lat: 37.8706, lng: 112.5489, aliases: ["さんせい", "さんせいしょう", "山西", "shanxi"] },
+      { id: "liaoning", name: "遼寧省", pinyin: "Liaoning", lat: 41.8357, lng: 123.4291, aliases: ["りょうねい", "りょうねいしょう", "遼寧", "liaoning"] },
+      { id: "jilin", name: "吉林省", pinyin: "Jilin", lat: 43.8378, lng: 126.5496, aliases: ["きつりん", "きつりんしょう", "吉林", "jilin"] },
+      { id: "heilongjiang", name: "黒竜江省", pinyin: "Heilongjiang", lat: 45.7569, lng: 126.6424, aliases: ["こくりゅうこう", "こくりゅうこうしょう", "黒竜江", "heilongjiang"] },
+      { id: "jiangsu", name: "江蘇省", pinyin: "Jiangsu", lat: 32.0617, lng: 118.7632, aliases: ["こうそ", "こうそしょう", "江蘇", "jiangsu"] },
+      { id: "zhejiang", name: "浙江省", pinyin: "Zhejiang", lat: 30.2674, lng: 120.1528, aliases: ["せっこう", "せっこうしょう", "浙江", "zhejiang"] },
+      { id: "anhui", name: "安徽省", pinyin: "Anhui", lat: 31.8612, lng: 117.2849, aliases: ["あんき", "あんきしょう", "安徽", "anhui"] },
+      { id: "fujian", name: "福建省", pinyin: "Fujian", lat: 26.0745, lng: 119.2965, aliases: ["ふっけん", "ふっけんしょう", "福建", "fujian"] },
+      { id: "jiangxi", name: "江西省", pinyin: "Jiangxi", lat: 28.6829, lng: 115.8582, aliases: ["こうせい", "こうせいしょう", "江西", "jiangxi"] },
+      { id: "shandong", name: "山東省", pinyin: "Shandong", lat: 36.6512, lng: 117.1201, aliases: ["さんとう", "さんとうしょう", "山東", "shandong"] },
+      { id: "henan", name: "河南省", pinyin: "Henan", lat: 34.7655, lng: 113.6654, aliases: ["かなん", "かなんしょう", "河南", "henan"] },
+      { id: "hubei", name: "湖北省", pinyin: "Hubei", lat: 30.5465, lng: 114.3419, aliases: ["こほく", "こほくしょう", "湖北", "hubei"] },
+      { id: "hunan", name: "湖南省", pinyin: "Hunan", lat: 28.1124, lng: 112.9838, aliases: ["こなん", "こなんしょう", "湖南", "hunan"] },
+      { id: "guangdong", name: "広東省", pinyin: "Guangdong", lat: 23.1291, lng: 113.2644, aliases: ["かんとん", "かんとんしょう", "広東", "guangdong"] },
+      { id: "hainan", name: "海南省", pinyin: "Hainan", lat: 20.0200, lng: 110.3388, aliases: ["かいなん", "かいなんしょう", "海南", "hainan"] },
+      { id: "sichuan", name: "四川省", pinyin: "Sichuan", lat: 30.6598, lng: 104.0657, aliases: ["しせん", "しせんしょう", "四川", "sichuan"] },
+      { id: "guizhou", name: "貴州省", pinyin: "Guizhou", lat: 26.5982, lng: 106.7074, aliases: ["きしゅう", "きしゅうしょう", "貴州", "guizhou"] },
+      { id: "yunnan", name: "雲南省", pinyin: "Yunnan", lat: 25.0453, lng: 102.7100, aliases: ["うんなん", "うんなんしょう", "雲南", "yunnan"] },
+      { id: "shaanxi_xi", name: "陝西省", pinyin: "Shaanxi", lat: 34.2655, lng: 108.9542, aliases: ["せんせい", "せんせいしょう", "陝西", "shaanxi"] },
+      { id: "gansu", name: "甘粛省", pinyin: "Gansu", lat: 36.0611, lng: 103.8343, aliases: ["かんしゅく", "かんしゅくしょう", "甘粛", "gansu"] },
+      { id: "qinghai", name: "青海省", pinyin: "Qinghai", lat: 36.6209, lng: 101.7801, aliases: ["せいかい", "せいかいしょう", "青海", "qinghai"] },
+      { id: "taiwan", name: "台湾省", pinyin: "Taiwan", lat: 25.0330, lng: 121.5654, aliases: ["たいわん", "タイワン", "台湾", "taiwan"] },
 
       // 自治区 (5)
-      { id: "inner_mongolia", name: "内蒙古自治区", pinyin: "Neimenggu", cx: 470, cy: 190, aliases: ["うちもうこ", "うちモンゴル", "うちもんごる", "内モンゴル", "内蒙古", "neimenggu", "inner mongolia"] },
-      { id: "guangxi", name: "広西チワン族自治区", pinyin: "Guangxi", cx: 470, cy: 435, aliases: ["こうせい", "ちわんぞく", "広西", "広西チワン族", "guangxi"] },
-      { id: "tibet", name: "チベット自治区", pinyin: "Xizang", cx: 210, cy: 320, aliases: ["ちべっと", "チベット", "西蔵", "にしくら", "xizang", "tibet"] },
-      { id: "ningxia", name: "寧夏回族自治区", pinyin: "Ningxia", cx: 440, cy: 230, aliases: ["ねいか", "かいぞく", "寧夏", "ningxia"] },
-      { id: "xinjiang", name: "新疆ウイグル自治区", pinyin: "Xinjiang", cx: 180, cy: 170, aliases: ["しんきょう", "ウイグル", "ういぐる", "新疆", "xinjiang"] },
+      { id: "inner_mongolia", name: "内蒙古自治区", pinyin: "Neimenggu", lat: 40.8175, lng: 111.7656, aliases: ["うちもうこ", "うちモンゴル", "うちもんごる", "内モンゴル", "内蒙古", "neimenggu", "inner mongolia"] },
+      { id: "guangxi", name: "広西チワン族自治区", pinyin: "Guangxi", lat: 22.8155, lng: 108.3275, aliases: ["こうせい", "ちわんぞく", "広西", "広西チワン族", "guangxi"] },
+      { id: "tibet", name: "チベット自治区", pinyin: "Xizang", lat: 29.6525, lng: 91.1721, aliases: ["ちべっと", "チベット", "西蔵", "にしくら", "xizang", "tibet"] },
+      { id: "ningxia", name: "寧夏回族自治区", pinyin: "Ningxia", lat: 38.4712, lng: 106.2587, aliases: ["ねいか", "かいぞく", "寧夏", "ningxia"] },
+      { id: "xinjiang", name: "新疆ウイグル自治区", pinyin: "Xinjiang", lat: 43.7930, lng: 87.6271, aliases: ["しんきょう", "ウイグル", "ういぐる", "新疆", "xinjiang"] },
 
       // 特別行政区 (2)
-      { id: "hongkong", name: "香港特別行政区", pinyin: "Hong Kong", cx: 545, cy: 440, aliases: ["ほんこん", "ホンコン", "香港", "hongkong", "hong kong"] },
-      { id: "macau", name: "マカオ特別行政区", pinyin: "Macao", cx: 525, cy: 445, aliases: ["まかお", "マカオ", "澳門", "macao", "macau"] }
+      { id: "hongkong", name: "香港特別行政区", pinyin: "Hong Kong", lat: 22.3193, lng: 114.1694, aliases: ["ほんこん", "ホンコン", "香港", "hongkong", "hong kong"] },
+      { id: "macau", name: "マカオ特別行政区", pinyin: "Macao", lat: 22.1987, lng: 113.5439, aliases: ["まかお", "マカオ", "澳門", "macao", "macau"] }
     ];
 
-    // --- ゲームの状態変数 ---
+    // --- 変数管理 ---
+    let map;
+    let markers = {};
     let discoveredProvinces = new Set();
     let timerInterval = null;
     let secondsElapsed = 0;
     let isGameActive = false;
 
-    // --- DOM要素 ---
+    // DOM要素
     const inputEl = document.getElementById('province-input');
     const scoreEl = document.getElementById('score');
     const countEl = document.getElementById('found-count');
     const timerEl = document.getElementById('timer');
     const gridEl = document.getElementById('provinces-grid');
-    const groupSvg = document.getElementById('provinces-group');
     const toastEl = document.getElementById('toast');
     const giveupBtn = document.getElementById('giveup-btn');
     const resetBtn = document.getElementById('reset-btn');
 
-    // --- 初期化処理 ---
+    // --- 地図の初期化 ---
+    function initMap() {
+      // 中国中心付近を設定
+      map = L.map('map', {
+        center: [35.0, 105.0],
+        zoom: 4,
+        zoomControl: true
+      });
+
+      // OpenStreetMap タイルレイヤー
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 10,
+        minZoom: 3
+      }).addTo(map);
+
+      // マーカーの生成
+      PROVINCES_DATA.forEach(prov => {
+        const icon = L.divIcon({
+          className: 'custom-div-icon',
+          html: `<div class="marker-pin" id="pin-${prov.id}"></div>`,
+          iconSize: [16, 16],
+          iconAnchor: [8, 8]
+        });
+
+        const marker = L.marker([prov.lat, prov.lng], { icon: icon }).addTo(map);
+        markers[prov.id] = marker;
+      });
+    }
+
+    // --- ゲーム初期化 ---
     function initGame() {
       discoveredProvinces.clear();
       secondsElapsed = 0;
       isGameActive = false;
       clearInterval(timerInterval);
-      
+
       updateStats();
-      renderMapNodes();
       renderSidebarList();
-      
+
+      // マーカーの初期化
+      PROVINCES_DATA.forEach(prov => {
+        const pin = document.getElementById(`pin-${prov.id}`);
+        if (pin) pin.classList.remove('discovered');
+        if (markers[prov.id]) {
+          markers[prov.id].unbindTooltip();
+        }
+      });
+
       inputEl.value = '';
       inputEl.disabled = false;
       inputEl.focus();
     }
 
-    // 地図上のSVGノードを描画
-    function renderMapNodes() {
-      groupSvg.innerHTML = '';
-      
-      PROVINCES_DATA.forEach(prov => {
-        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-        
-        // 円ノード
-        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        circle.setAttribute('cx', prov.cx);
-        circle.setAttribute('cy', prov.cy);
-        circle.setAttribute('r', 5);
-        circle.setAttribute('class', 'province-node');
-        circle.setAttribute('id', `node-${prov.id}`);
-        
-        // 省名テキスト
-        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        text.setAttribute('x', prov.cx);
-        text.setAttribute('y', prov.cy - 8);
-        text.setAttribute('class', 'province-label');
-        text.setAttribute('id', `label-${prov.id}`);
-        text.textContent = prov.name;
-        
-        g.appendChild(circle);
-        g.appendChild(text);
-        groupSvg.appendChild(g);
-      });
-    }
-
     // サイドバーの省リスト描画
     function renderSidebarList() {
       gridEl.innerHTML = '';
-      
       PROVINCES_DATA.forEach(prov => {
         const card = document.createElement('div');
         card.className = 'province-card';
         card.id = `card-${prov.id}`;
-        
         card.innerHTML = `
           <span class="province-name">？？？</span>
           <span class="province-pinyin">${prov.pinyin}</span>
@@ -530,16 +510,16 @@
       isGameActive = false;
     }
 
-    // --- 文字列の正規化 ---
+    // --- テキスト正規化 ---
     function normalizeText(text) {
       return text
         .trim()
         .toLowerCase()
-        .replace(/[\u30a1-\u30f6]/g, match => String.fromCharCode(match.charCodeAt(0) - 0x60)) // カタカナ→ひらがな
-        .replace(/\s+/g, ''); // スペース除去
+        .replace(/[\u30a1-\u30f6]/g, match => String.fromCharCode(match.charCodeAt(0) - 0x60))
+        .replace(/\s+/g, '');
     }
 
-    // --- 入力判定ロジック ---
+    // --- 入力判定 ---
     function checkInput() {
       const val = normalizeText(inputEl.value);
       if (!val) return;
@@ -551,7 +531,6 @@
       PROVINCES_DATA.forEach(prov => {
         if (discoveredProvinces.has(prov.id)) return;
 
-        // 判定対象（漢字正式名称、ピンイン、略称・別名）
         const matchName = normalizeText(prov.name);
         const matchPinyin = normalizeText(prov.pinyin);
         const matchAliases = prov.aliases.map(a => normalizeText(a));
@@ -563,24 +542,34 @@
       });
     }
 
-    // 正解時の処理
+    // 正解処理
     function markAsDiscovered(prov) {
       discoveredProvinces.add(prov.id);
 
-      // SVGマップの更新
-      const node = document.getElementById(`node-${prov.id}`);
-      const label = document.getElementById(`label-${prov.id}`);
-      if (node) node.classList.add('discovered');
-      if (label) label.classList.add('visible');
+      // マーカーの更新とツールチップ付与
+      const pin = document.getElementById(`pin-${prov.id}`);
+      if (pin) pin.classList.add('discovered');
 
-      // サイドバーカードの更新
+      const marker = markers[prov.id];
+      if (marker) {
+        marker.bindTooltip(prov.name, {
+          permanent: true,
+          direction: 'top',
+          className: 'province-tooltip',
+          offset: [0, -8]
+        }).openTooltip();
+
+        // 正解した場所に視点をスムーズ移動
+        map.panTo([prov.lat, prov.lng], { animate: true, duration: 0.5 });
+      }
+
+      // サイドバー更新
       const card = document.getElementById(`card-${prov.id}`);
       if (card) {
         card.classList.add('found');
         card.querySelector('.province-name').textContent = prov.name;
       }
 
-      // UIトースト
       showToast(`${prov.name} 発見！`);
       updateStats();
 
@@ -592,14 +581,12 @@
       }
     }
 
-    // スコア表示の更新
     function updateStats() {
       const count = `${discoveredProvinces.size} / ${PROVINCES_DATA.length}`;
       scoreEl.textContent = count;
       countEl.textContent = count;
     }
 
-    // トースト通知表示
     function showToast(message) {
       toastEl.textContent = message;
       toastEl.classList.add('show');
@@ -612,7 +599,7 @@
     function giveUp() {
       if (discoveredProvinces.size === PROVINCES_DATA.length) return;
       stopTimer();
-      
+
       PROVINCES_DATA.forEach(prov => {
         if (!discoveredProvinces.has(prov.id)) {
           const card = document.getElementById(`card-${prov.id}`);
@@ -621,10 +608,15 @@
             card.querySelector('.province-name').textContent = prov.name;
             card.querySelector('.province-name').style.color = '#c62828';
           }
-          const label = document.getElementById(`label-${prov.id}`);
-          if (label) {
-            label.classList.add('visible');
-            label.style.fill = '#c62828';
+
+          const marker = markers[prov.id];
+          if (marker) {
+            marker.bindTooltip(prov.name, {
+              permanent: true,
+              direction: 'top',
+              className: 'province-tooltip-giveup',
+              offset: [0, -8]
+            }).openTooltip();
           }
         }
       });
@@ -633,13 +625,16 @@
       showToast('ギブアップ！全行政区を表示しました');
     }
 
-    // --- イベントリスナー ---
+    // --- イベント ---
     inputEl.addEventListener('input', checkInput);
     giveupBtn.addEventListener('click', giveUp);
     resetBtn.addEventListener('click', initGame);
 
-    // 起動時の初期化
-    initGame();
+    // 起動
+    window.addEventListener('DOMContentLoaded', () => {
+      initMap();
+      initGame();
+    });
   </script>
 </body>
 </html>
