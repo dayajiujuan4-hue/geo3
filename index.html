@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>中国地理版「ポケモンいえるかな？」</title>
+  <style>
+    :root {
+      --primary: #d32f2f;
+      --primary-dark: #9a0007;
+      --accent: #ffb300;
+      --bg: #f8f9fa;
+      --card-bg: #ffffff;
+      --text: #212121;
+      --text-muted: #666;
+      --border: #e0e0e0;
+      --success: #2e7d32;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    header {
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      color: white;
+      padding: 12px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      z-index: 10;
+    }
+
+    .title-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    h1 {
+      font-size: 1.3rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    .subtitle {
+      font-size: 0.8rem;
+      opacity: 0.85;
+      background: rgba(255,255,255,0.2);
+      padding: 2px 8px;
+      border-radius: 12px;
+    }
+
+    .stats-bar {
+      display: flex;
+      gap: 20px;
+      align-items: center;
+      font-weight: bold;
+    }
+
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+    }
+
+    .stat-label {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      opacity: 0.8;
+    }
+
+    .stat-value {
+      font-size: 1.2rem;
+      color: var(--accent);
+    }
+
+    .main-container {
+      display: flex;
+      flex: 1;
+      height: calc(100vh - 60px);
+      position: relative;
+    }
+
+    /* 地図エリア */
+    .map-container {
+      flex: 1;
+      background-color: #eef2f5;
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+    }
+
+    svg#china-map {
+      width: 100%;
+      height: 100%;
+      max-width: 1000px;
+      max-height: 800px;
+      filter: drop-shadow(0px 8px 16px rgba(0,0,0,0.06));
+    }
+
+    /* 各省・地域のスタイル */
+    .province {
+      fill: #e0e0e0;
+      stroke: #ffffff;
+      stroke-width: 1.5;
+      transition: fill 0.3s ease;
+    }
+
+    .province:hover {
+      fill: #d5d5d5;
+    }
+
+    /* 都市ノード（ベースマーカー） */
+    .city-node {
+      fill: #9e9e9e;
+      stroke: #ffffff;
+      stroke-width: 1.5;
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+
+    .city-node.discovered {
+      fill: var(--primary);
+      stroke: var(--accent);
+      stroke-width: 2;
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.3); }
+      100% { transform: scale(1); }
+    }
+
+    /* ラベル・ピン表示 */
+    .city-label {
+      font-size: 11px;
+      font-weight: bold;
+      fill: #333;
+      text-anchor: middle;
+      opacity: 0;
+      transition: opacity 0.4s ease, transform 0.3s ease;
+      pointer-events: none;
+    }
+
+    .city-label.visible {
+      opacity: 1;
+    }
+
+    /* サイドバー / 操作パネル */
+    .sidebar {
+      width: 340px;
+      background: var(--card-bg);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      box-shadow: -2px 0 10px rgba(0,0,0,0.05);
+      z-index: 5;
+    }
+
+    .input-section {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+      background: #fafafa;
+    }
+
+    .input-wrapper {
+      position: relative;
+      margin-bottom: 10px;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 12px 16px;
+      font-size: 1rem;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    input[type="text"]:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(211, 47, 47, 0.15);
+    }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+    }
+
+    button {
+      padding: 8px 16px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background-color 0.2s, transform 0.1s;
+    }
+
+    button:active {
+      transform: scale(0.98);
+    }
+
+    .btn-primary {
+      background-color: var(--primary);
+      color: white;
+      flex: 1;
+    }
+
+    .btn-primary:hover {
+      background-color: var(--primary-dark);
+    }
+
+    .btn-secondary {
+      background-color: #e0e0e0;
+      color: #333;
+    }
+
+    .btn-secondary:hover {
+      background-color: #d6d6d6;
+    }
+
+    /* 発見リスト */
+    .list-section {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+    }
+
+    .list-title {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .cities-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+
+    .city-card {
+      background: #f5f5f5;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 0.85rem;
+      color: #aaa;
+      display: flex;
+      flex-direction: column;
+      transition: all 0.3s ease;
+    }
+
+    .city-card.found {
+      background: #e8f5e9;
+      border-color: #a5d6a7;
+      color: var(--success);
+      font-weight: bold;
+    }
+
+    .city-pinyin {
+      font-size: 0.7rem;
+      color: #888;
+      font-weight: normal;
+    }
+
+    .city-card.found .city-pinyin {
+      color: #4ea852;
+    }
+
+    /* 正解トーストフィードバック */
+    .toast {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-20px);
+      background: rgba(46, 125, 50, 0.95);
+      color: white;
+      padding: 10px 24px;
+      border-radius: 20px;
+      font-weight: bold;
+      font-size: 1rem;
+      pointer-events: none;
+      opacity: 0;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 20;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* レスポンシブ対応 */
+    @media (max-width: 768px) {
+      .main-container {
+        flex-direction: column;
+      }
+      .sidebar {
+        width: 100%;
+        height: 40vh;
+      }
+      .map-container {
+        height: 60vh;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="title-group">
+      <h1>中国地理版「言えるかな？」</h1>
+      <span class="subtitle">都市・主要地名当て</span>
+    </div>
+    <div class="stats-bar">
+      <div class="stat-item">
+        <span class="stat-label">スコア</span>
+        <span class="stat-value" id="score">0 / 20</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">経過時間</span>
+        <span class="stat-value" id="timer">00:00</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="main-container">
+    <!-- 地図領域（独自SVG描画） -->
+    <div class="map-container">
+      <div id="toast" class="toast">北京 発見！</div>
+      
+      <svg id="china-map" viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg">
+        <!-- 簡易版 中国全土のSVGパス描画 (外部依存なし) -->
+        <g id="provinces">
+          <!-- 簡略化された中国地図の地域シルエット -->
+          <path class="province" d="M150,200 L220,180 L280,220 L250,300 L180,320 L120,260 Z" title="新疆/西蔵" />
+          <path class="province" d="M280,220 L380,210 L410,270 L340,340 L250,300 Z" title="青海/甘粛/四川" />
+          <path class="province" d="M380,210 L500,160 L560,200 L480,260 L410,270 Z" title="内蒙古/内陸部" />
+          <path class="province" d="M500,160 L620,80 L680,120 L620,190 L560,200 Z" title="東北（黒竜江/吉林/遼寧）" />
+          <path class="province" d="M560,200 L640,210 L630,280 L540,270 L480,260 Z" title="華北（北京/天津/河北/山東）" />
+          <path class="province" d="M480,260 L540,270 L580,350 L480,380 L410,270 Z" title="華中（湖北/湖南/河南）" />
+          <path class="province" d="M540,270 L630,280 L650,360 L580,350 Z" title="華東（上海/江蘇/浙江/安徽）" />
+          <path class="province" d="M340,340 L410,270 L480,380 L420,440 L330,400 Z" title="雲南/貴州" />
+          <path class="province" d="M480,380 L580,350 L610,430 L500,460 L420,440 Z" title="華南（広東/広西/福建）" />
+          <path class="province" d="M480,480 L520,480 L510,510 L470,500 Z" title="海南" />
+          <path class="province" d="M640,370 L660,370 L650,420 L630,410 Z" title="台湾" />
+        </g>
+
+        <!-- 各都市のノードとラベル群（JSで生成・連動） -->
+        <g id="cities-group"></g>
+      </svg>
+    </div>
+
+    <!-- サイドバー (入力 & リスト表示) -->
+    <div class="sidebar">
+      <div class="input-section">
+        <div class="input-wrapper">
+          <input type="text" id="city-input" placeholder="都市名を入力 (例: 北京, peiking, しゃんはい)" autocomplete="off" autofocus>
+        </div>
+        <div class="controls">
+          <button class="btn-secondary" id="giveup-btn">ギブアップ</button>
+          <button class="btn-secondary" id="reset-btn">リセット</button>
+        </div>
+      </div>
+
+      <div class="list-section">
+        <div class="list-title">
+          <span>都市一覧</span>
+          <span id="found-count">0 / 20</span>
+        </div>
+        <div class="cities-grid" id="cities-grid">
+          <!-- JSで動的にカードを生成 -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- 都市データ定義 (中国主要都市 20箇所) ---
+    const CITIES_DATA = [
+      { id: "beijing", name: "北京", pinyin: "Beijing", cx: 565, cy: 205, aliases: ["peiking", "ぺきん", "ペキン"] },
+      { id: "shanghai", name: "上海", pinyin: "Shanghai", cx: 625, cy: 300, aliases: ["しゃんはい", "シャンハイ"] },
+      { id: "guangzhou", name: "広州", pinyin: "Guangzhou", cx: 535, cy: 425, aliases: ["こうしゅう", "コウシュウ", "canton"] },
+      { id: "shenzhen", name: "深セン", pinyin: "Shenzhen", cx: 542, cy: 435, aliases: ["しんせん", "シンセン", "深圳"] },
+      { id: "chengdu", name: "成都", pinyin: "Chengdu", cx: 385, cy: 325, aliases: ["せいと", "セイト"] },
+      { id: "chongqing", name: "重慶", pinyin: "Chongqing", cx: 415, cy: 335, aliases: ["じゅうけい", "ジュウケイ"] },
+      { id: "xian", name: "西安", pinyin: "Xi'an", cx: 460, cy: 265, aliases: ["せいあん", "セイアン"] },
+      { id: "hangzhou", name: "杭州", pinyin: "Hangzhou", cx: 610, cy: 320, aliases: ["こうしゅう", "コウシュウ"] },
+      { id: "wuhan", name: "武漢", pinyin: "Wuhan", cx: 515, cy: 320, aliases: ["ぶかん", "ブカン"] },
+      { id: "nanjing", name: "南京", pinyin: "Nanjing", cx: 580, cy: 285, aliases: ["なんきん", "ナンキン"] },
+      { id: "tianjin", name: "天津", pinyin: "Tianjin", cx: 575, cy: 218, aliases: ["てんしん", "テンシン"] },
+      { id: "dalian", name: "大連", pinyin: "Dalian", cx: 615, cy: 195, aliases: ["だいれん", "ダイレン"] },
+      { id: "qingdao", name: "青島", pinyin: "Qingdao", cx: 605, cy: 235, aliases: ["ちんたお", "チンタオ", "あおしま"] },
+      { id: "kunming", name: "昆明", pinyin: "Kunming", cx: 375, cy: 410, aliases: ["こんめい", "コンメイ"] },
+      { id: "harbin", name: "ハルビン", pinyin: "Harbin", cx: 645, cy: 110, aliases: ["はるびん", "哈爾浜"] },
+      { id: "shenyang", name: "瀋陽", pinyin: "Shenyang", cx: 625, cy: 160, aliases: ["しんよう", "シンヨウ"] },
+      { id: "xiamen", name: "厦門", pinyin: "Xiamen", cx: 585, cy: 405, aliases: ["アモイ", "あもい", "シアメン"] },
+      { id: "guilin", name: "桂林", pinyin: "Guilin", cx: 480, cy: 410, aliases: ["けいりん", "ケイリン"] },
+      { id: "lhasa", name: "ラサ", pinyin: "Lhasa", cx: 215, cy: 310, aliases: ["らさ", "拉薩"] },
+      { id: "urumqi", name: "ウルムチ", pinyin: "Urumqi", cx: 185, cy: 150, aliases: ["うるむち", "烏魯木斉"] }
+    ];
+
+    // --- ゲームの状態変数 ---
+    let discoveredCities = new Set();
+    let timerInterval = null;
+    let secondsElapsed = 0;
+    let isGameActive = false;
+
+    // --- DOM要素 ---
+    const inputEl = document.getElementById('city-input');
+    const scoreEl = document.getElementById('score');
+    const countEl = document.getElementById('found-count');
+    const timerEl = document.getElementById('timer');
+    const citiesGridEl = document.getElementById('cities-grid');
+    const citiesGroupSvg = document.getElementById('cities-group');
+    const toastEl = document.getElementById('toast');
+    const giveupBtn = document.getElementById('giveup-btn');
+    const resetBtn = document.getElementById('reset-btn');
+
+    // --- 初期化処理 ---
+    function initGame() {
+      discoveredCities.clear();
+      secondsElapsed = 0;
+      isGameActive = false;
+      clearInterval(timerInterval);
+      
+      updateStats();
+      renderMapNodes();
+      renderSidebarList();
+      
+      inputEl.value = '';
+      inputEl.disabled = false;
+      inputEl.focus();
+    }
+
+    // 地図上のSVG要素を描画
+    function renderMapNodes() {
+      citiesGroupSvg.innerHTML = '';
+      
+      CITIES_DATA.forEach(city => {
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        
+        // 都市の円ノード
+        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle.setAttribute('cx', city.cx);
+        circle.setAttribute('cy', city.cy);
+        circle.setAttribute('r', 6);
+        circle.setAttribute('class', 'city-node');
+        circle.setAttribute('id', `node-${city.id}`);
+        
+        // 都市名テキスト
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('x', city.cx);
+        text.setAttribute('y', city.cy - 10);
+        text.setAttribute('class', 'city-label');
+        text.setAttribute('id', `label-${city.id}`);
+        text.textContent = `${city.name}`;
+        
+        g.appendChild(circle);
+        g.appendChild(text);
+        citiesGroupSvg.appendChild(g);
+      });
+    }
+
+    // サイドバーの都市リスト描画
+    function renderSidebarList() {
+      citiesGridEl.innerHTML = '';
+      
+      CITIES_DATA.forEach(city => {
+        const card = document.createElement('div');
+        card.className = 'city-card';
+        card.id = `card-${city.id}`;
+        
+        card.innerHTML = `
+          <span class="city-name">？？？</span>
+          <span class="city-pinyin">${city.pinyin}</span>
+        `;
+        citiesGridEl.appendChild(card);
+      });
+    }
+
+    // --- タイマー機能 ---
+    function startTimer() {
+      if (isGameActive) return;
+      isGameActive = true;
+      timerInterval = setInterval(() => {
+        secondsElapsed++;
+        const mins = String(Math.floor(secondsElapsed / 60)).padStart(2, '0');
+        const secs = String(secondsElapsed % 60).padStart(2, '0');
+        timerEl.textContent = `${mins}:${secs}`;
+      }, 1000);
+    }
+
+    function stopTimer() {
+      clearInterval(timerInterval);
+      isGameActive = false;
+    }
+
+    // --- 文字列の正規化（ひらがな・大文字小文字など） ---
+    function normalizeText(text) {
+      return text
+        .trim()
+        .toLowerCase()
+        .replace(/[\u30a1-\u30f6]/g, match => String.fromCharCode(match.charCodeAt(0) - 0x60)); // カタカナ→ひらがな
+    }
+
+    // --- 入力判定ロジック ---
+    function checkInput() {
+      const val = normalizeText(inputEl.value);
+      if (!val) return;
+
+      if (!isGameActive && discoveredCities.size === 0) {
+        startTimer();
+      }
+
+      CITIES_DATA.forEach(city => {
+        if (discoveredCities.has(city.id)) return;
+
+        // 判定対象（漢字名、ピンイン、別名）
+        const matchName = normalizeText(city.name);
+        const matchPinyin = normalizeText(city.pinyin);
+        const matchAliases = city.aliases.map(a => normalizeText(a));
+
+        if (val === matchName || val === matchPinyin || matchAliases.includes(val)) {
+          // 正解時の処理
+          markAsDiscovered(city);
+          inputEl.value = '';
+        }
+      });
+    }
+
+    // 正解としてマークする処理
+    function markAsDiscovered(city) {
+      discoveredCities.add(city.id);
+
+      // SVGマップの更新
+      const node = document.getElementById(`node-${city.id}`);
+      const label = document.getElementById(`label-${city.id}`);
+      if (node) node.classList.add('discovered');
+      if (label) label.classList.add('visible');
+
+      // サイドバーカードの更新
+      const card = document.getElementById(`card-${city.id}`);
+      if (card) {
+        card.classList.add('found');
+        card.querySelector('.city-name').textContent = city.name;
+      }
+
+      // UIトースト
+      showToast(`${city.name} (${city.pinyin}) を発見！`);
+      updateStats();
+
+      // 全問正解判定
+      if (discoveredCities.size === CITIES_DATA.length) {
+        stopTimer();
+        showToast('🎉 おめでとうございます！全都市達成！');
+        inputEl.disabled = true;
+      }
+    }
+
+    // スコア表示の更新
+    function updateStats() {
+      const count = `${discoveredCities.size} / ${CITIES_DATA.length}`;
+      scoreEl.textContent = count;
+      countEl.textContent = count;
+    }
+
+    // トースト通知表示
+    function showToast(message) {
+      toastEl.textContent = message;
+      toastEl.classList.add('show');
+      setTimeout(() => {
+        toastEl.classList.remove('show');
+      }, 1800);
+    }
+
+    // ギブアップ機能（未発見の全都市を表示）
+    function giveUp() {
+      if (discoveredCities.size === CITIES_DATA.length) return;
+      stopTimer();
+      
+      CITIES_DATA.forEach(city => {
+        if (!discoveredCities.has(city.id)) {
+          const card = document.getElementById(`card-${city.id}`);
+          if (card) {
+            card.style.borderColor = '#e57373';
+            card.querySelector('.city-name').textContent = city.name;
+            card.querySelector('.city-name').style.color = '#c62828';
+          }
+          const label = document.getElementById(`label-${city.id}`);
+          if (label) {
+            label.classList.add('visible');
+            label.style.fill = '#c62828';
+          }
+        }
+      });
+
+      inputEl.disabled = true;
+      showToast('ギブアップ！全都市を表示しました');
+    }
+
+    // --- イベントリスナー ---
+    inputEl.addEventListener('input', checkInput);
+    giveupBtn.addEventListener('click', giveUp);
+    resetBtn.addEventListener('click', initGame);
+
+    // 起動時の初期化
+    initGame();
+  </script>
+</body>
+</html>
